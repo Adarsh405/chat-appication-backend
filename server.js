@@ -19,13 +19,21 @@ const io = new Server(server, {
   },
 });
 
+const clientUrl = process.env.CLIENT_URL;
+
+const io = new Server(server, {
+  cors: {
+    origin: clientUrl,
+    methods: ["GET", "POST"],
+  },
+});
+
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: clientUrl,
     credentials: true,
   })
 );
-
 app.use(express.json());
 
 app.get("/", (req, res) => {
