@@ -9,15 +9,11 @@ const userRoutes = require("./routes/userRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 
 const app = express();
-
 const server = http.createServer(app);
 
-const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"],
-  },
-});
+// ===============================
+// CORS
+// ===============================
 
 const clientUrl = process.env.CLIENT_URL;
 
@@ -34,7 +30,12 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(express.json());
+
+// ===============================
+// ROUTES
+// ===============================
 
 app.get("/", (req, res) => {
   res.json({
@@ -46,14 +47,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
 
-
 // ===============================
 // SOCKET.IO
 // ===============================
 
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
-
 
   // User joins their personal room
   socket.on("join", (userId) => {
@@ -64,8 +63,10 @@ io.on("connection", (socket) => {
     );
   });
 
+  // ===============================
+  // REAL-TIME MESSAGES
+  // ===============================
 
-  // Send message in real time
   socket.on("send_message", (data) => {
     const {
       senderId,
@@ -84,75 +85,86 @@ io.on("connection", (socket) => {
   });
 
   // ===============================
-    // WEBRTC CALL SIGNALING
-    // ===============================
+  // WEBRTC CALL SIGNALING
+  // ===============================
 
-    // Send incoming call
-    socket.on("call_user", (data) => {
+  // Incoming call
+  socket.on("call_user", (data) => {
     const {
-        receiverId,
-        callerId,
-        callerName,
-        callType,
+      receiverId,
+      callerId,
+      callerName,
+      callType,
     } = data;
 
     io.to(`user_${receiverId}`).emit(
-        "incoming_call",
-        {
+      "incoming_call",
+      {
         callerId,
         callerName,
         callType,
-        }
+      }
     );
-    });
+  });
 
-    // Send WebRTC offer
-    socket.on("webrtc_offer", (data) => {
-    const { receiverId, offer } = data;
+  // WebRTC offer
+  socket.on("webrtc_offer", (data) => {
+    const {
+      receiverId,
+      offer,
+    } = data;
 
     io.to(`user_${receiverId}`).emit(
-        "webrtc_offer",
-        {
+      "webrtc_offer",
+      {
         offer,
-        }
+      }
     );
-    });
+  });
 
-    // Send WebRTC answer
-    socket.on("webrtc_answer", (data) => {
-    const { receiverId, answer } = data;
-
-    io.to(`user_${receiverId}`).emit(
-        "webrtc_answer",
-        {
-        answer,
-        }
-    );
-    });
-
-    // Send ICE candidate
-    socket.on("webrtc_ice_candidate", (data) => {
+  // WebRTC answer
+  socket.on("webrtc_answer", (data) => {
     const {
-        receiverId,
-        candidate,
+      receiverId,
+      answer,
     } = data;
 
     io.to(`user_${receiverId}`).emit(
-        "webrtc_ice_candidate",
-        {
-        candidate,
-        }
+      "webrtc_answer",
+      {
+        answer,
+      }
     );
-    });
+  });
 
-    // End call
-    socket.on("end_call", (data) => {
+  // ICE candidate
+  socket.on("webrtc_ice_candidate", (data) => {
+    const {
+      receiverId,
+      candidate,
+    } = data;
+
+    io.to(`user_${receiverId}`).emit(
+      "webrtc_ice_candidate",
+      {
+        candidate,
+      }
+    );
+  });
+
+  // End call
+  socket.on("end_call", (data) => {
     const { receiverId } = data;
 
     io.to(`user_${receiverId}`).emit(
-        "call_ended"
+      "call_ended"
     );
-    });
+  });
+
+  // ===============================
+  // DISCONNECT
+  // ===============================
+
   socket.on("disconnect", () => {
     console.log(
       "Socket disconnected:",
@@ -161,11 +173,14 @@ io.on("connection", (socket) => {
   });
 });
 
+// ===============================
+// START SERVER
+// ===============================
 
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
   console.log(
-    `Server running on http://localhost:${PORT}`
+    `Server running on port ${PORT}`
   );
 });
