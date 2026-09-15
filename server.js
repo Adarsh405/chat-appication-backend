@@ -11,12 +11,9 @@ const messageRoutes = require("./routes/messageRoutes");
 const app = express();
 const server = http.createServer(app);
 
-// ======================================================
-// ENVIRONMENT
-// ======================================================
-
 const PORT = process.env.PORT || 5000;
-const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+const CLIENT_URL =
+  process.env.CLIENT_URL || "http://localhost:5173";
 
 // ======================================================
 // CORS
@@ -59,36 +56,30 @@ app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
 
 // ======================================================
-// SOCKET.IO CONNECTION
+// SOCKET CONNECTION
 // ======================================================
 
 io.on("connection", (socket) => {
-  console.log("========================================");
   console.log("Socket connected:", socket.id);
-  console.log("========================================");
 
   // ====================================================
   // JOIN USER ROOM
   // ====================================================
 
   socket.on("join", (userId) => {
-    if (!userId) {
-      console.log("Join failed: userId missing");
-      return;
-    }
+    if (!userId) return;
 
     const room = `user_${userId}`;
 
     socket.join(room);
 
-    // Store user ID on socket
     socket.userId = String(userId);
 
-    console.log(`User ${userId} joined room: ${room}`);
+    console.log(`User ${userId} joined ${room}`);
   });
 
   // ====================================================
-  // REAL-TIME CHAT MESSAGE
+  // CHAT MESSAGE
   // ====================================================
 
   socket.on("send_message", (data = {}) => {
@@ -99,13 +90,8 @@ io.on("connection", (socket) => {
     } = data;
 
     if (!senderId || !receiverId || !message) {
-      console.log("Invalid send_message data");
       return;
     }
-
-    console.log(
-      `Message: ${senderId} -> ${receiverId}`
-    );
 
     io.to(`user_${receiverId}`).emit(
       "receive_message",
@@ -135,23 +121,13 @@ io.on("connection", (socket) => {
       !receiverId ||
       !callType
     ) {
-      console.log("Invalid call_user data");
       return;
     }
 
     console.log(
-      `📞 ${callType} call`
+      `📞 ${callType} call: ${callerId} -> ${receiverId}`
     );
 
-    console.log(
-      `Caller: ${callerId}`
-    );
-
-    console.log(
-      `Receiver: ${receiverId}`
-    );
-
-    // Send incoming call to receiver
     io.to(`user_${receiverId}`).emit(
       "incoming_call",
       {
@@ -185,10 +161,6 @@ io.on("connection", (socket) => {
 
     console.log(
       `✅ ${callType} call accepted`
-    );
-
-    console.log(
-      `Receiver ${receiverId} accepted call from ${callerId}`
     );
 
     io.to(`user_${callerId}`).emit(
@@ -251,22 +223,11 @@ io.on("connection", (socket) => {
       !offer ||
       !callType
     ) {
-      console.log(
-        "Invalid webrtc_offer data"
-      );
       return;
     }
 
     console.log(
-      `📤 WebRTC ${callType} OFFER`
-    );
-
-    console.log(
-      `From: ${callerId || socket.userId}`
-    );
-
-    console.log(
-      `To: ${receiverId}`
+      `📤 WebRTC ${callType} offer`
     );
 
     io.to(`user_${receiverId}`).emit(
@@ -298,22 +259,11 @@ io.on("connection", (socket) => {
       !answer ||
       !callType
     ) {
-      console.log(
-        "Invalid webrtc_answer data"
-      );
       return;
     }
 
     console.log(
-      `📥 WebRTC ${callType} ANSWER`
-    );
-
-    console.log(
-      `From: ${callerId || socket.userId}`
-    );
-
-    console.log(
-      `To: ${receiverId}`
+      `📥 WebRTC ${callType} answer`
     );
 
     io.to(`user_${receiverId}`).emit(
@@ -329,7 +279,7 @@ io.on("connection", (socket) => {
   });
 
   // ====================================================
-  // WEBRTC ICE CANDIDATE
+  // WEBRTC ICE
   // ====================================================
 
   socket.on(
@@ -347,15 +297,8 @@ io.on("connection", (socket) => {
         !candidate ||
         !callType
       ) {
-        console.log(
-          "Invalid ICE candidate data"
-        );
         return;
       }
-
-      console.log(
-        `🧊 WebRTC ${callType} ICE candidate`
-      );
 
       io.to(`user_${receiverId}`).emit(
         "webrtc_ice_candidate",
@@ -382,22 +325,11 @@ io.on("connection", (socket) => {
     } = data;
 
     if (!receiverId) {
-      console.log(
-        "end_call: receiverId missing"
-      );
       return;
     }
 
     console.log(
       `📴 Ending ${callType || "unknown"} call`
-    );
-
-    console.log(
-      `From: ${callerId || socket.userId}`
-    );
-
-    console.log(
-      `To: ${receiverId}`
     );
 
     io.to(`user_${receiverId}`).emit(
@@ -430,10 +362,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    console.log(
-      `🔴 ${callType} call busy`
-    );
-
     io.to(`user_${callerId}`).emit(
       "call_busy",
       {
@@ -450,26 +378,9 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", (reason) => {
     console.log(
-      "========================================"
-    );
-
-    console.log(
       "Socket disconnected:",
-      socket.id
-    );
-
-    console.log(
-      "User:",
-      socket.userId || "unknown"
-    );
-
-    console.log(
-      "Reason:",
+      socket.id,
       reason
-    );
-
-    console.log(
-      "========================================"
     );
   });
 });
@@ -479,9 +390,9 @@ io.on("connection", (socket) => {
 // ======================================================
 
 server.listen(PORT, () => {
-  console.log("========================================");
+  console.log("======================================");
   console.log("🚀 SERVER STARTED");
   console.log(`Port: ${PORT}`);
   console.log(`Client: ${CLIENT_URL}`);
-  console.log("========================================");
+  console.log("======================================");
 });
