@@ -11,32 +11,42 @@ const messageRoutes = require("./routes/messageRoutes");
 const app = express();
 const server = http.createServer(app);
 
-// ==========================================
+// ======================================================
+// ENVIRONMENT
+// ======================================================
+
+const PORT = process.env.PORT || 5000;
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+
+// ======================================================
 // CORS
-// ==========================================
-
-const clientUrl = process.env.CLIENT_URL;
-
-const io = new Server(server, {
-  cors: {
-    origin: clientUrl,
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
+// ======================================================
 
 app.use(
   cors({
-    origin: clientUrl,
+    origin: CLIENT_URL,
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })
 );
 
 app.use(express.json());
 
-// ==========================================
+// ======================================================
+// SOCKET.IO
+// ======================================================
+
+const io = new Server(server, {
+  cors: {
+    origin: CLIENT_URL,
+    credentials: true,
+    methods: ["GET", "POST"],
+  },
+});
+
+// ======================================================
 // ROUTES
-// ==========================================
+// ======================================================
 
 app.get("/", (req, res) => {
   res.json({
@@ -48,41 +58,54 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
 
-// ==========================================
-// SOCKET.IO
-// ==========================================
+// ======================================================
+// SOCKET.IO CONNECTION
+// ======================================================
 
 io.on("connection", (socket) => {
+  console.log("========================================");
   console.log("Socket connected:", socket.id);
+  console.log("========================================");
 
-  // ========================================
+  // ====================================================
   // JOIN USER ROOM
-  // ========================================
+  // ====================================================
 
   socket.on("join", (userId) => {
-    if (!userId) return;
+    if (!userId) {
+      console.log("Join failed: userId missing");
+      return;
+    }
 
     const room = `user_${userId}`;
 
     socket.join(room);
 
-    console.log(`User ${userId} joined ${room}`);
+    // Store user ID on socket
+    socket.userId = String(userId);
+
+    console.log(`User ${userId} joined room: ${room}`);
   });
 
-  // ========================================
-  // REAL-TIME MESSAGE
-  // ========================================
+  // ====================================================
+  // REAL-TIME CHAT MESSAGE
+  // ====================================================
 
-  socket.on("send_message", (data) => {
+  socket.on("send_message", (data = {}) => {
     const {
       senderId,
       receiverId,
       message,
-    } = data || {};
+    } = data;
 
     if (!senderId || !receiverId || !message) {
+      console.log("Invalid send_message data");
       return;
     }
+
+    console.log(
+      `Message: ${senderId} -> ${receiverId}`
+    );
 
     io.to(`user_${receiverId}`).emit(
       "receive_message",
@@ -94,116 +117,252 @@ io.on("connection", (socket) => {
     );
   });
 
-  // ========================================
-  // CALL USER
-  // ========================================
+  // ====================================================
+  // START CALL
+  // ====================================================
 
-  socket.on("call_user", (data) => {
+  socket.on("call_user", (data = {}) => {
     const {
-      receiverId,
       callerId,
+      receiverId,
       callerName,
+      callerAvatar,
       callType,
-    } = data || {};
+    } = data;
 
-    if (!receiverId || !callerId || !callType) {
+    if (
+      !callerId ||
+      !receiverId ||
+      !callType
+    ) {
+      console.log("Invalid call_user data");
       return;
     }
 
     console.log(
-      `${callType} call: ${callerId} -> ${receiverId}`
+      `📞 ${callType} call`
     );
 
+    console.log(
+      `Caller: ${callerId}`
+    );
+
+    console.log(
+      `Receiver: ${receiverId}`
+    );
+
+    // Send incoming call to receiver
     io.to(`user_${receiverId}`).emit(
       "incoming_call",
       {
         callerId,
-        callerName,
+        receiverId,
+        callerName: callerName || "Unknown",
+        callerAvatar: callerAvatar || null,
         callType,
       }
     );
   });
 
-  // ========================================
-  // WEBRTC OFFER
-  // ========================================
+  // ====================================================
+  // CALL ACCEPTED
+  // ====================================================
 
-  socket.on("webrtc_offer", (data) => {
+  socket.on("call_accepted", (data = {}) => {
     const {
+      callerId,
       receiverId,
-      offer,
       callType,
-    } = data || {};
+    } = data;
 
-    if (!receiverId || !offer || !callType) {
+    if (
+      !callerId ||
+      !receiverId ||
+      !callType
+    ) {
       return;
     }
 
     console.log(
-      `WebRTC ${callType} offer -> ${receiverId}`
+      `✅ ${callType} call accepted`
+    );
+
+    console.log(
+      `Receiver ${receiverId} accepted call from ${callerId}`
+    );
+
+    io.to(`user_${callerId}`).emit(
+      "call_accepted",
+      {
+        callerId,
+        receiverId,
+        callType,
+      }
+    );
+  });
+
+  // ====================================================
+  // CALL REJECTED
+  // ====================================================
+
+  socket.on("call_rejected", (data = {}) => {
+    const {
+      callerId,
+      receiverId,
+      callType,
+    } = data;
+
+    if (
+      !callerId ||
+      !receiverId ||
+      !callType
+    ) {
+      return;
+    }
+
+    console.log(
+      `❌ ${callType} call rejected`
+    );
+
+    io.to(`user_${callerId}`).emit(
+      "call_rejected",
+      {
+        callerId,
+        receiverId,
+        callType,
+      }
+    );
+  });
+
+  // ====================================================
+  // WEBRTC OFFER
+  // ====================================================
+
+  socket.on("webrtc_offer", (data = {}) => {
+    const {
+      callerId,
+      receiverId,
+      offer,
+      callType,
+    } = data;
+
+    if (
+      !receiverId ||
+      !offer ||
+      !callType
+    ) {
+      console.log(
+        "Invalid webrtc_offer data"
+      );
+      return;
+    }
+
+    console.log(
+      `📤 WebRTC ${callType} OFFER`
+    );
+
+    console.log(
+      `From: ${callerId || socket.userId}`
+    );
+
+    console.log(
+      `To: ${receiverId}`
     );
 
     io.to(`user_${receiverId}`).emit(
       "webrtc_offer",
       {
+        callerId:
+          callerId || socket.userId,
+        receiverId,
         offer,
         callType,
       }
     );
   });
 
-  // ========================================
+  // ====================================================
   // WEBRTC ANSWER
-  // ========================================
+  // ====================================================
 
-  socket.on("webrtc_answer", (data) => {
+  socket.on("webrtc_answer", (data = {}) => {
     const {
+      callerId,
       receiverId,
       answer,
       callType,
-    } = data || {};
+    } = data;
 
-    if (!receiverId || !answer || !callType) {
+    if (
+      !receiverId ||
+      !answer ||
+      !callType
+    ) {
+      console.log(
+        "Invalid webrtc_answer data"
+      );
       return;
     }
 
     console.log(
-      `WebRTC ${callType} answer -> ${receiverId}`
+      `📥 WebRTC ${callType} ANSWER`
+    );
+
+    console.log(
+      `From: ${callerId || socket.userId}`
+    );
+
+    console.log(
+      `To: ${receiverId}`
     );
 
     io.to(`user_${receiverId}`).emit(
       "webrtc_answer",
       {
+        callerId:
+          callerId || socket.userId,
+        receiverId,
         answer,
         callType,
       }
     );
   });
 
-  // ========================================
+  // ====================================================
   // WEBRTC ICE CANDIDATE
-  // ========================================
+  // ====================================================
 
   socket.on(
     "webrtc_ice_candidate",
-    (data) => {
+    (data = {}) => {
       const {
+        callerId,
         receiverId,
         candidate,
         callType,
-      } = data || {};
+      } = data;
 
       if (
         !receiverId ||
         !candidate ||
         !callType
       ) {
+        console.log(
+          "Invalid ICE candidate data"
+        );
         return;
       }
+
+      console.log(
+        `🧊 WebRTC ${callType} ICE candidate`
+      );
 
       io.to(`user_${receiverId}`).emit(
         "webrtc_ice_candidate",
         {
+          callerId:
+            callerId || socket.userId,
+          receiverId,
           candidate,
           callType,
         }
@@ -211,52 +370,118 @@ io.on("connection", (socket) => {
     }
   );
 
-  // ========================================
+  // ====================================================
   // END CALL
-  // ========================================
+  // ====================================================
 
-  socket.on("end_call", (data) => {
+  socket.on("end_call", (data = {}) => {
     const {
+      callerId,
       receiverId,
       callType,
-    } = data || {};
+    } = data;
 
     if (!receiverId) {
+      console.log(
+        "end_call: receiverId missing"
+      );
       return;
     }
 
     console.log(
-      `Ending ${callType || "unknown"} call -> ${receiverId}`
+      `📴 Ending ${callType || "unknown"} call`
+    );
+
+    console.log(
+      `From: ${callerId || socket.userId}`
+    );
+
+    console.log(
+      `To: ${receiverId}`
     );
 
     io.to(`user_${receiverId}`).emit(
       "call_ended",
       {
+        callerId:
+          callerId || socket.userId,
+        receiverId,
         callType,
       }
     );
   });
 
-  // ========================================
-  // DISCONNECT
-  // ========================================
+  // ====================================================
+  // CALL BUSY
+  // ====================================================
 
-  socket.on("disconnect", () => {
+  socket.on("call_busy", (data = {}) => {
+    const {
+      callerId,
+      receiverId,
+      callType,
+    } = data;
+
+    if (
+      !callerId ||
+      !receiverId ||
+      !callType
+    ) {
+      return;
+    }
+
+    console.log(
+      `🔴 ${callType} call busy`
+    );
+
+    io.to(`user_${callerId}`).emit(
+      "call_busy",
+      {
+        callerId,
+        receiverId,
+        callType,
+      }
+    );
+  });
+
+  // ====================================================
+  // DISCONNECT
+  // ====================================================
+
+  socket.on("disconnect", (reason) => {
+    console.log(
+      "========================================"
+    );
+
     console.log(
       "Socket disconnected:",
       socket.id
     );
+
+    console.log(
+      "User:",
+      socket.userId || "unknown"
+    );
+
+    console.log(
+      "Reason:",
+      reason
+    );
+
+    console.log(
+      "========================================"
+    );
   });
 });
 
-// ==========================================
+// ======================================================
 // START SERVER
-// ==========================================
-
-const PORT = process.env.PORT || 5000;
+// ======================================================
 
 server.listen(PORT, () => {
-  console.log(
-    `Server running on port ${PORT}`
-  );
+  console.log("========================================");
+  console.log("🚀 SERVER STARTED");
+  console.log(`Port: ${PORT}`);
+  console.log(`Client: ${CLIENT_URL}`);
+  console.log("========================================");
 });
