@@ -54,8 +54,13 @@ app.use("/api/messages", messageRoutes);
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
-  // User joins their personal room
+  // ===============================
+  // JOIN USER ROOM
+  // ===============================
+
   socket.on("join", (userId) => {
+    if (!userId) return;
+
     socket.join(`user_${userId}`);
 
     console.log(
@@ -74,6 +79,14 @@ io.on("connection", (socket) => {
       message,
     } = data;
 
+    if (
+      !senderId ||
+      !receiverId ||
+      !message
+    ) {
+      return;
+    }
+
     io.to(`user_${receiverId}`).emit(
       "receive_message",
       {
@@ -85,10 +98,9 @@ io.on("connection", (socket) => {
   });
 
   // ===============================
-  // WEBRTC CALL SIGNALING
+  // INCOMING CALL
   // ===============================
 
-  // Incoming call
   socket.on("call_user", (data) => {
     const {
       receiverId,
@@ -96,6 +108,18 @@ io.on("connection", (socket) => {
       callerName,
       callType,
     } = data;
+
+    if (
+      !receiverId ||
+      !callerId ||
+      !callType
+    ) {
+      return;
+    }
+
+    console.log(
+      `${callType} call: ${callerId} -> ${receiverId}`
+    );
 
     io.to(`user_${receiverId}`).emit(
       "incoming_call",
@@ -107,57 +131,112 @@ io.on("connection", (socket) => {
     );
   });
 
-  // WebRTC offer
+  // ===============================
+  // WEBRTC OFFER
+  // ===============================
+
   socket.on("webrtc_offer", (data) => {
     const {
       receiverId,
       offer,
+      callType,
     } = data;
+
+    if (
+      !receiverId ||
+      !offer ||
+      !callType
+    ) {
+      return;
+    }
 
     io.to(`user_${receiverId}`).emit(
       "webrtc_offer",
       {
         offer,
+        callType,
       }
     );
   });
 
-  // WebRTC answer
+  // ===============================
+  // WEBRTC ANSWER
+  // ===============================
+
   socket.on("webrtc_answer", (data) => {
     const {
       receiverId,
       answer,
+      callType,
     } = data;
+
+    if (
+      !receiverId ||
+      !answer ||
+      !callType
+    ) {
+      return;
+    }
 
     io.to(`user_${receiverId}`).emit(
       "webrtc_answer",
       {
         answer,
+        callType,
       }
     );
   });
 
-  // ICE candidate
-  socket.on("webrtc_ice_candidate", (data) => {
+  // ===============================
+  // ICE CANDIDATE
+  // ===============================
+
+  socket.on(
+    "webrtc_ice_candidate",
+    (data) => {
+      const {
+        receiverId,
+        candidate,
+        callType,
+      } = data;
+
+      if (
+        !receiverId ||
+        !candidate ||
+        !callType
+      ) {
+        return;
+      }
+
+      io.to(`user_${receiverId}`).emit(
+        "webrtc_ice_candidate",
+        {
+          candidate,
+          callType,
+        }
+      );
+    }
+  );
+
+  // ===============================
+  // END CALL
+  // ===============================
+
+  socket.on("end_call", (data) => {
     const {
       receiverId,
-      candidate,
+      callType,
     } = data;
 
+    if (!receiverId) {
+      return;
+    }
+
     io.to(`user_${receiverId}`).emit(
-      "webrtc_ice_candidate",
+      "call_ended",
       {
-        candidate,
+        callType,
       }
-    );
-  });
-
-  // End call
-  socket.on("end_call", (data) => {
-    const { receiverId } = data;
-
-    io.to(`user_${receiverId}`).emit(
-      "call_ended"
     );
   });
 
