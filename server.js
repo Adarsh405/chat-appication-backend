@@ -11,9 +11,9 @@ const messageRoutes = require("./routes/messageRoutes");
 const app = express();
 const server = http.createServer(app);
 
-// ===============================
+// ==========================================
 // CORS
-// ===============================
+// ==========================================
 
 const clientUrl = process.env.CLIENT_URL;
 
@@ -21,6 +21,7 @@ const io = new Server(server, {
   cors: {
     origin: clientUrl,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
@@ -33,9 +34,9 @@ app.use(
 
 app.use(express.json());
 
-// ===============================
+// ==========================================
 // ROUTES
-// ===============================
+// ==========================================
 
 app.get("/", (req, res) => {
   res.json({
@@ -47,43 +48,39 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
 
-// ===============================
+// ==========================================
 // SOCKET.IO
-// ===============================
+// ==========================================
 
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
-  // ===============================
+  // ========================================
   // JOIN USER ROOM
-  // ===============================
+  // ========================================
 
   socket.on("join", (userId) => {
     if (!userId) return;
 
-    socket.join(`user_${userId}`);
+    const room = `user_${userId}`;
 
-    console.log(
-      `User ${userId} joined room user_${userId}`
-    );
+    socket.join(room);
+
+    console.log(`User ${userId} joined ${room}`);
   });
 
-  // ===============================
-  // REAL-TIME MESSAGES
-  // ===============================
+  // ========================================
+  // REAL-TIME MESSAGE
+  // ========================================
 
   socket.on("send_message", (data) => {
     const {
       senderId,
       receiverId,
       message,
-    } = data;
+    } = data || {};
 
-    if (
-      !senderId ||
-      !receiverId ||
-      !message
-    ) {
+    if (!senderId || !receiverId || !message) {
       return;
     }
 
@@ -97,9 +94,9 @@ io.on("connection", (socket) => {
     );
   });
 
-  // ===============================
-  // INCOMING CALL
-  // ===============================
+  // ========================================
+  // CALL USER
+  // ========================================
 
   socket.on("call_user", (data) => {
     const {
@@ -107,13 +104,9 @@ io.on("connection", (socket) => {
       callerId,
       callerName,
       callType,
-    } = data;
+    } = data || {};
 
-    if (
-      !receiverId ||
-      !callerId ||
-      !callType
-    ) {
+    if (!receiverId || !callerId || !callType) {
       return;
     }
 
@@ -131,24 +124,24 @@ io.on("connection", (socket) => {
     );
   });
 
-  // ===============================
+  // ========================================
   // WEBRTC OFFER
-  // ===============================
+  // ========================================
 
   socket.on("webrtc_offer", (data) => {
     const {
       receiverId,
       offer,
       callType,
-    } = data;
+    } = data || {};
 
-    if (
-      !receiverId ||
-      !offer ||
-      !callType
-    ) {
+    if (!receiverId || !offer || !callType) {
       return;
     }
+
+    console.log(
+      `WebRTC ${callType} offer -> ${receiverId}`
+    );
 
     io.to(`user_${receiverId}`).emit(
       "webrtc_offer",
@@ -159,24 +152,24 @@ io.on("connection", (socket) => {
     );
   });
 
-  // ===============================
+  // ========================================
   // WEBRTC ANSWER
-  // ===============================
+  // ========================================
 
   socket.on("webrtc_answer", (data) => {
     const {
       receiverId,
       answer,
       callType,
-    } = data;
+    } = data || {};
 
-    if (
-      !receiverId ||
-      !answer ||
-      !callType
-    ) {
+    if (!receiverId || !answer || !callType) {
       return;
     }
+
+    console.log(
+      `WebRTC ${callType} answer -> ${receiverId}`
+    );
 
     io.to(`user_${receiverId}`).emit(
       "webrtc_answer",
@@ -187,9 +180,9 @@ io.on("connection", (socket) => {
     );
   });
 
-  // ===============================
-  // ICE CANDIDATE
-  // ===============================
+  // ========================================
+  // WEBRTC ICE CANDIDATE
+  // ========================================
 
   socket.on(
     "webrtc_ice_candidate",
@@ -198,7 +191,7 @@ io.on("connection", (socket) => {
         receiverId,
         candidate,
         callType,
-      } = data;
+      } = data || {};
 
       if (
         !receiverId ||
@@ -218,19 +211,23 @@ io.on("connection", (socket) => {
     }
   );
 
-  // ===============================
+  // ========================================
   // END CALL
-  // ===============================
+  // ========================================
 
   socket.on("end_call", (data) => {
     const {
       receiverId,
       callType,
-    } = data;
+    } = data || {};
 
     if (!receiverId) {
       return;
     }
+
+    console.log(
+      `Ending ${callType || "unknown"} call -> ${receiverId}`
+    );
 
     io.to(`user_${receiverId}`).emit(
       "call_ended",
@@ -240,9 +237,9 @@ io.on("connection", (socket) => {
     );
   });
 
-  // ===============================
+  // ========================================
   // DISCONNECT
-  // ===============================
+  // ========================================
 
   socket.on("disconnect", () => {
     console.log(
@@ -252,9 +249,9 @@ io.on("connection", (socket) => {
   });
 });
 
-// ===============================
+// ==========================================
 // START SERVER
-// ===============================
+// ==========================================
 
 const PORT = process.env.PORT || 5000;
 
